@@ -1368,3 +1368,48 @@ async fn multiple_read_calls() {
 
     assert!(stored.value == 42);
 }
+#[tokio::test]
+async fn initialize_storage_slots() {
+    let rng = &mut StdRng::seed_from_u64(2322u64);
+
+    abigen!(
+        MyContract,
+        "fuels-contract/tests/test_projects/storage-slots-initialization/abi.json",
+    );
+    // Build the contract
+    let salt: [u8; 32] = rng.gen();
+    let salt = Salt::from(salt);
+    let compiled = Contract::compile_sway_contract(
+        "../fuels-contract/tests/test_projects/storage-slots-initialization",
+        salt,
+    )
+    .unwrap();
+
+    let (client, contract_id) = Contract::launch_and_deploy(&compiled).await.unwrap();
+
+    println!("Contract deployed @ {:x}", contract_id);
+
+    let contract_instance = MyContract::new(compiled, client);
+    let mut storage_key = [0u8; 32];
+    storage_key[5] = 1;
+    println!("Storage key: {:?}", storage_key);
+    // This returns 214 as expected
+    let result = contract_instance
+        .initialize_storage_slot(storage_key)
+        .call()
+        .await
+        .unwrap();
+    println!("Result: {:?}", result);
+    println!("Returned value {:?}, expected 214", result.value);
+    storage_key[5] = 0;
+    storage_key[4] = 1;
+    println!("Storage key: {:?}", storage_key);
+    // This returns 214 as expected
+    let result = contract_instance
+        .initialize_storage_slot(storage_key)
+        .call()
+        .await
+        .unwrap();
+    println!("Result: {:?}", result);
+    println!("Returned value {:?}, expected 214", result.value);
+}
