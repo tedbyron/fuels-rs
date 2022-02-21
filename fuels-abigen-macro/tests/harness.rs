@@ -1436,3 +1436,34 @@ async fn initialize_storage_slots_fifth_bit() {
     println!("Result: {:?}", result);
     println!("Returned value {:?}, expected 214", result.value);
 }
+
+#[tokio::test]
+async fn storage_slot_access() {
+    let rng = &mut StdRng::seed_from_u64(2322u64);
+    abigen!(
+        MyContract,
+        "fuels-abigen-macro/tests/test_projects/storage-slots-repro/abi.json",
+    );
+    // Build the contract
+    let salt: [u8; 32] = rng.gen();
+    let salt = Salt::from(salt);
+    let compiled = Contract::compile_sway_contract(
+        "../fuels-abigen-macro/tests/test_projects/storage-slots-repro",
+        salt,
+    )
+    .unwrap();
+
+    let (client, contract_id) = Contract::launch_and_deploy(&compiled).await.unwrap();
+
+    println!("Contract deployed @ {:x}", contract_id);
+
+    let contract_instance = MyContract::new(compiled, client);
+    let storage_key = [0xBB; 32];
+    println!("Storage key: {:?}", storage_key);
+    let result = contract_instance
+        .test_storage_slot(storage_key)
+        .call()
+        .await;
+    // This fails with a MemoryOverflow
+    println!("Result: {:?}", result);
+}
