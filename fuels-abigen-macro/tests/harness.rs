@@ -1374,13 +1374,13 @@ async fn initialize_storage_slots_sixth_bit() {
     let rng = &mut StdRng::seed_from_u64(2322u64);
     abigen!(
         MyContract,
-        "fuels-contract/tests/test_projects/storage-slots-initialization/abi.json",
+        "fuels-abigen-macro/tests/test_projects/storage-slots-repro/abi.json",
     );
     // Build the contract
     let salt: [u8; 32] = rng.gen();
     let salt = Salt::from(salt);
     let compiled = Contract::compile_sway_contract(
-        "../fuels-contract/tests/test_projects/storage-slots-initialization",
+        "../fuels-abigen-macro/tests/test_projects/storage-slots-repro",
         salt,
     )
     .unwrap();
@@ -1408,13 +1408,13 @@ async fn initialize_storage_slots_fifth_bit() {
 
     abigen!(
         MyContract,
-        "fuels-contract/tests/test_projects/storage-slots-initialization/abi.json",
+        "fuels-abigen-macro/tests/test_projects/storage-slots-repro/abi.json",
     );
     // Build the contract
     let salt: [u8; 32] = rng.gen();
     let salt = Salt::from(salt);
     let compiled = Contract::compile_sway_contract(
-        "../fuels-contract/tests/test_projects/storage-slots-initialization",
+        "../fuels-abigen-macro/tests/test_projects/storage-slots-repro",
         salt,
     )
     .unwrap();
