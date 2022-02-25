@@ -1,8 +1,8 @@
 use fuel_core::service::{Config, FuelService};
 use fuel_gql_client::client::FuelClient;
-use fuel_tx::Salt;
+use fuel_tx::{PanicReason, Salt};
 use fuels_abigen_macro::abigen;
-use fuels_contract::contract::Contract;
+use fuels_contract::contract::{CallResponse, Contract};
 use fuels_core::Token;
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
@@ -1369,8 +1369,19 @@ async fn multiple_read_calls() {
     assert!(stored.value == 42);
 }
 
+fn build_storage_key(index: usize, byte_value: u8) -> [u8; 32] {
+    let mut storage_key = [0u8; 32];
+    storage_key[index] = byte_value;
+    storage_key
+}
+
+fn get_panic_reason(r: CallResponse<u64>) -> String {
+    let receipts = r.receipts;
+    let script_results = &receipts[2];
+    script_results.result().unwrap().reason().to_string()
+}
 #[tokio::test]
-async fn initialize_storage_slots_sixth_bit() {
+async fn repro_storage_slots() {
     let rng = &mut StdRng::seed_from_u64(2322u64);
     abigen!(
         MyContract,
@@ -1390,53 +1401,32 @@ async fn initialize_storage_slots_sixth_bit() {
     println!("Contract deployed @ {:x}", contract_id);
 
     let contract_instance = MyContract::new(compiled, client);
-    let mut storage_key = [0u8; 32];
-    storage_key[5] = 1;
-    println!("Storage key: {:?}", storage_key);
-    // This returns 214 as expected
-    let result = contract_instance
-        .initialize_storage_slot(storage_key)
-        .call()
-        .await
-        .unwrap();
-    println!("Result: {:?}", result);
-    println!("Returned value {:?}, expected 214", result.value);
+    for index in 0..32 {
+        for value in 0..=0xFF {
+            let storage_key = build_storage_key(index, value);
+            let result = contract_instance
+                .initialize_storage_slot(storage_key)
+                .call()
+                .await
+                .unwrap();
+            if (index < 5) && (value > 0) {
+                assert_eq!(result.value, 0);
+                assert_eq!(
+                    get_panic_reason(result),
+                    PanicReason::MemoryOverflow.to_string()
+                );
+            } else if (index == 5) && (value > 127) {
+                assert_eq!(result.value, 0);
+                assert_eq!(
+                    get_panic_reason(result),
+                    PanicReason::MemoryOverflow.to_string()
+                );
+            } else {
+                assert_eq!(result.value, 214);
+            }
+        }
+    }
 }
-#[tokio::test]
-async fn initialize_storage_slots_fifth_bit() {
-    let rng = &mut StdRng::seed_from_u64(2322u64);
-
-    abigen!(
-        MyContract,
-        "fuels-abigen-macro/tests/test_projects/storage-slots-repro/abi.json",
-    );
-    // Build the contract
-    let salt: [u8; 32] = rng.gen();
-    let salt = Salt::from(salt);
-    let compiled = Contract::compile_sway_contract(
-        "../fuels-abigen-macro/tests/test_projects/storage-slots-repro",
-        salt,
-    )
-    .unwrap();
-
-    let (client, contract_id) = Contract::launch_and_deploy(&compiled).await.unwrap();
-
-    println!("Contract deployed @ {:x}", contract_id);
-
-    let contract_instance = MyContract::new(compiled, client);
-    let mut storage_key = [0u8; 32];
-    storage_key[4] = 1;
-    println!("Storage key: {:?}", storage_key);
-    // This returns 214 as expected
-    let result = contract_instance
-        .initialize_storage_slot(storage_key)
-        .call()
-        .await
-        .unwrap();
-    println!("Result: {:?}", result);
-    println!("Returned value {:?}, expected 214", result.value);
-}
-
 #[tokio::test]
 async fn storage_slot_access() {
     let rng = &mut StdRng::seed_from_u64(2322u64);
