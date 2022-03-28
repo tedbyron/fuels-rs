@@ -183,6 +183,23 @@ impl ABIDecoder {
 
                 Ok(result)
             }
+            ParamType::Tuple(args_vec) => {
+                let mut tokens = vec![];
+                let mut new_offset = offset;
+
+                for arg_type in args_vec {
+                    let res = self.decode_param(arg_type, data, new_offset)?;
+                    new_offset = res.new_offset;
+                    tokens.push(res.token);
+                }
+
+                let result = DecodeResult {
+                    token: Token::Tuple(tokens),
+                    new_offset,
+                };
+
+                Ok(result)
+            }
         }
     }
 }
@@ -212,6 +229,38 @@ fn peek_word(data: &[u8], offset: usize) -> Result<ByteArray, CodecError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn decode_primitive_types_tuples() {
+        let first_tuple = ParamType::Tuple(vec![ParamType::U32, ParamType::Bool, ParamType::U16]);
+        let second_tuple = ParamType::Tuple(vec![ParamType::Bool, ParamType::U64]);
+        let types = vec![first_tuple, second_tuple];
+        #[rustfmt::skip]
+        let data = [
+            0x0, 0x0, 0x0, 0x0, 0xff, 0xff, 0xff, 0xff, // each line is one token ie 8 bytes
+            0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x01,
+            0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0xff, 0xff,
+            0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x01,
+            0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
+        ];
+
+        let mut decoder = ABIDecoder::new();
+
+        let decoded = decoder.decode(&types, &data).unwrap();
+
+        let expected_1 = Token::Tuple(vec![
+            Token::U32(u32::MAX),
+            Token::Bool(true),
+            Token::U16(u16::MAX),
+        ]);
+        let expected_2 = Token::Tuple(vec![Token::Bool(true), Token::U64(u64::MAX)]);
+        let expected = vec![expected_1, expected_2];
+        assert_eq!(decoded, expected);
+
+        println!(
+            "Decoded ABI for ({:#0x?}) with types ({:?}): {:?}",
+            data, types, decoded
+        );
+    }
 
     #[test]
     fn decode_int() {
