@@ -217,7 +217,7 @@ mod tests {
         let mut signature = Signature::from_str(
             "64d8b60c08a7ecab307cb11a31a7153ec7e4ff06a8fb78b4fe9c982d44c731efe63303ec5c7686a56445bacdd4ee89f592f1b3e68bded25ea404cd6806205db4"
         ).expect("could not parse signature");
-        assert_eq!(signature.verify(msg.clone(), address).unwrap(), ());
+        assert!(signature.verify(msg.clone(), address).is_ok());
         signature.compact[0] = 0xFF;
         let result = signature
             .verify(msg.clone(), address)
