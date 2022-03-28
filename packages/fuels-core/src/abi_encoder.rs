@@ -55,6 +55,9 @@ impl ABIEncoder {
                     // Encode the Token within the enum
                     self.encode(&[arg_enum.1.to_owned()])?;
                 }
+                Token::Tuple(arg_vec) => {
+                    self.encode(arg_vec)?;
+                }
             };
         }
         Ok(self.encoded_args.clone())
@@ -95,6 +98,39 @@ mod tests {
         );
 
         assert_eq!(result, [0x0, 0x0, 0x0, 0x0, 0x0c, 0x36, 0xcb, 0x9c]);
+    }
+    #[test]
+    fn encode_function_primitive_types_tuple() {
+        // let json_abi =
+        // r#"
+        // [
+        //     {
+        //         "type":"function",
+        //         "inputs": [{"name":"arg","type":"(u64, bool, u32)"}],
+        //         "name":"function_with_tuple",
+        //         "outputs": []
+        //     }
+        // ]
+        // "#;
+
+        let sway_fn = "function_with_tuple((u64, bool, u32))";
+        let args: Vec<Token> = vec![Token::U64(0xDD), Token::Bool(true), Token::U32(u32::MAX)];
+
+        let expected_encoded_abi = [
+            0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0xdd, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x1, 0x0,
+            0x0, 0x0, 0x0, 0xff, 0xff, 0xff, 0xff,
+        ];
+
+        let expected_function_selector = [0x0, 0x0, 0x0, 0x0, 0x15, 0x59, 0x81, 0x1a];
+
+        let mut abi_encoder = ABIEncoder::new_with_fn_selector(sway_fn.as_bytes());
+
+        let encoded = abi_encoder.encode(&args).unwrap();
+
+        println!("Encoded ABI for ({}): {:#0x?}", sway_fn, encoded);
+
+        assert_eq!(hex::encode(expected_encoded_abi), hex::encode(encoded));
+        assert_eq!(abi_encoder.function_selector, expected_function_selector);
     }
 
     #[test]
