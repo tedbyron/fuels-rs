@@ -35,6 +35,8 @@ pub enum ParamType {
     Struct(Vec<ParamType>),
     #[strum(disabled)]
     Enum(Vec<ParamType>),
+    #[strum(disabled)]
+    Tuple(Vec<ParamType>),
 }
 
 impl Default for ParamType {
@@ -56,6 +58,12 @@ impl ParamType {
             Self::String(size) => size > &8,
             Self::Struct(params) => match params.len() {
                 // If only one component in this struct
+                // check if this element itself is bigger than a `WORD`.
+                1 => params[0].bigger_than_word(),
+                _ => true,
+            },
+            Self::Tuple(params) => match params.len() {
+                // If only one component in this tuple
                 // check if this element itself is bigger than a `WORD`.
                 1 => params[0].bigger_than_word(),
                 _ => true,
@@ -90,6 +98,13 @@ impl fmt::Display for ParamType {
                 let s = format!("Struct(vec![{}])", inner_strings.join(","));
                 write!(f, "{}", s)
             }
+            ParamType::Tuple(inner) => {
+                let inner_strings: Vec<String> =
+                    inner.iter().map(|p| format!("ParamType::{}", p)).collect();
+
+                let s = format!("Tuple(vec![{}])", inner_strings.join(","));
+                write!(f, "{}", s)
+            }
             _ => {
                 write!(f, "{:?}", self)
             }
@@ -112,6 +127,7 @@ pub enum Token {
     String(String),
     Struct(Vec<Token>),
     Enum(Box<EnumSelector>),
+    Tuple(Vec<Token>),
 }
 
 impl fmt::Display for Token {
