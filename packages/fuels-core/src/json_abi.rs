@@ -3,6 +3,7 @@ use crate::{abi_decoder::ABIDecoder, abi_encoder::ABIEncoder, errors::Error, Par
 use hex::FromHex;
 use itertools::Itertools;
 use std::convert::TryInto;
+use std::iter::zip;
 use std::str;
 use std::str::FromStr;
 
@@ -237,7 +238,30 @@ impl ABIParser {
 
                 Ok(Token::Enum(Box::new((discriminant as u8, token))))
             }
+            ParamType::Tuple(members) => {
+                return self.tokenize_primitive_types_tuple(&value, members);
+            }
         }
+    }
+
+    pub fn tokenize_primitive_types_tuple(
+        &self,
+        value: &str,
+        param_types: &Vec<ParamType>,
+    ) -> Result<Token, Error> {
+        if !value.starts_with('(') || !value.ends_with(')') || value.chars().count() == 2 {
+            return Err(Error::InvalidType(format!(
+                "Expected value in the form of a non-empty tuple type"
+            )));
+        }
+        let mut chars = value.chars();
+        chars.next();
+        chars.next_back();
+        let split: Vec<&str> = chars.as_str().split(", ").collect();
+        let tokens = zip(split, param_types)
+            .map(|(value, param_type)| self.tokenize(param_type, value.to_string()))
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(Token::Tuple(tokens))
     }
 
     /// Creates a struct `Token` from an array of parameter types and a string of values.
@@ -526,10 +550,31 @@ pub fn parse_param(param: &Property) -> Result<ParamType, Error> {
                 }
                 return parse_array_param(param);
             }
+            if param.type_field.contains('(') && param.type_field.contains(')') {
+                return parse_primitive_types_tuple_param(param);
+            }
             // Try to parse enum or struct
             parse_custom_type_param(param)
         }
     }
+}
+
+pub fn parse_primitive_types_tuple_param(param: &Property) -> Result<ParamType, Error> {
+    let trimmed = param
+        .type_field
+        .strip_prefix('(')
+        .unwrap()
+        .strip_suffix(')')
+        .unwrap();
+    if trimmed.len() == 0 {
+        return Err(Error::InvalidType(format!("Expected non-empty tuple type")));
+    }
+    let split: Vec<&str> = trimmed.split(", ").collect();
+    let type_members = split
+        .iter()
+        .map(|type_string| ParamType::from_str(type_string))
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(ParamType::Tuple(type_members))
 }
 
 pub fn parse_string_param(param: &Property) -> Result<ParamType, Error> {
@@ -593,7 +638,48 @@ pub fn parse_custom_type_param(param: &Property) -> Result<ParamType, Error> {
 mod tests {
     use super::*;
     use crate::ParamType;
+    #[test]
+    fn test_parse_primitive_types_tuple_param() {
+        let valid_tuple = Property {
+            name: "some_tuple".to_string(),
+            type_field: "(u64, bool, u32)".to_string(),
+            components: None,
+        };
+        let expected = "Tuple(vec![ParamType::U64,ParamType::Bool,ParamType::U32])";
+        let result = parse_primitive_types_tuple_param(&valid_tuple)
+            .unwrap()
+            .to_string();
+        assert_eq!(result, expected);
+        let invalid_tuple = Property {
+            name: "some_tuple".to_string(),
+            type_field: "(u64, [bool; 4], u32)".to_string(),
+            components: None,
+        };
+        let result = parse_primitive_types_tuple_param(&invalid_tuple)
+            .unwrap_err()
+            .to_string();
+        let expected = "Invalid type: Matching variant not found";
+        assert_eq!(result, expected);
+    }
 
+    #[test]
+    fn tokenize_primitive_types_tuple() {
+        let abi = ABIParser::new();
+
+        let value = "(1248, true, 293487)";
+        let members = vec![ParamType::U32, ParamType::Bool, ParamType::U64];
+        let expected = Token::Tuple(vec![
+            Token::U32(1248),
+            Token::Bool(true),
+            Token::U64(293487),
+        ]);
+        let result = abi.tokenize_primitive_types_tuple(value, &members).unwrap();
+        assert_eq!(result, expected);
+
+        let param_type = ParamType::Tuple(members);
+        let result = abi.tokenize(&param_type, value.to_string()).unwrap();
+        assert_eq!(result, expected);
+    }
     #[test]
     fn parse_string_and_array_param() {
         let array_prop = Property {
