@@ -6,4 +6,5 @@ members = [
     "packages/fuels-core",
     "packages/fuels-signers",
     "tools/fuels-abi-cli",
+    "examples/wallet-transfer",
 ]
