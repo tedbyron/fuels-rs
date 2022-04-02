@@ -3,14 +3,16 @@ use std::collections::HashMap;
 use crate::code_gen::bindings::ContractBindings;
 use crate::code_gen::custom_types_gen::{
     expand_internal_enum, expand_internal_struct, extract_custom_type_name_from_abi_property,
+    implement_detokenize_for_tuple,
 };
 use crate::code_gen::functions_gen::expand_function;
 use crate::errors::Error;
-use crate::json_abi::ABIParser;
+use crate::json_abi::{parse_param, ABIParser};
 use crate::source::Source;
 use crate::utils::ident;
 use sway_types::{JsonABI, Property};
 
+use crate::ParamType;
 use proc_macro2::{Ident, TokenStream};
 use quote::quote;
 
@@ -29,6 +31,9 @@ pub struct Abigen {
     custom_structs: HashMap<String, Property>,
 
     custom_enums: HashMap<String, Property>,
+
+    // The tuples contained in the ABI, necessary for detokinzation
+    tuples: Vec<Property>,
 
     /// Format the code using a locally installed copy of `rustfmt`.
     rustfmt: bool,
@@ -60,6 +65,7 @@ impl Abigen {
         Ok(Self {
             custom_structs: Abigen::get_custom_types(&parsed_abi, &CustomType::Struct),
             custom_enums: Abigen::get_custom_types(&parsed_abi, &CustomType::Enum),
+            tuples: Abigen::get_tuples(&parsed_abi),
             abi: parsed_abi,
             contract_name: ident(contract_name),
             abi_parser: ABIParser::new(),
@@ -204,6 +210,14 @@ impl Abigen {
         Ok(enums)
     }
 
+    fn abi_tuples(&self) -> Result<TokenStream, Error> {
+        let mut tuples = TokenStream::new();
+        for tuple in &self.tuples {
+            tuples.extend(implement_detokenize_for_tuple(tuple));
+        }
+        Ok(tuples)
+    }
+
     fn get_all_properties(abi: &JsonABI) -> Vec<&Property> {
         let mut all_properties: Vec<&Property> = vec![];
         for function in abi {
@@ -258,6 +272,21 @@ impl Abigen {
         }
 
         custom_types
+    }
+
+    /// Reads the parsed ABI and returns the tuples found in it
+    fn get_tuples(abi: &JsonABI) -> Vec<Property> {
+        let mut tuples = vec![];
+
+        let all_properties = Abigen::get_all_properties(abi);
+
+        for prop in all_properties {
+            let parsed = parse_param(prop);
+            if let Ok(ParamType::Tuple(_)) = parsed {
+                tuples.push(prop.clone());
+            }
+        }
+        tuples
     }
 
     // Recursively gets inner properties defined in nested structs or nested enums
@@ -538,6 +567,50 @@ mod tests {
         assert_eq!(0, contract.custom_structs.len());
 
         assert!(contract.custom_enums.contains_key("MyEnum"));
+
+        let _bindings = contract.generate().unwrap();
+    }
+
+    #[test]
+    fn test_abi_get_tuples() {
+        let contract = r#"
+        [
+            {
+                "type":"contract",
+                "inputs": [
+                  {
+                    "name": "boumbim",
+                    "type": "(u16, bool)",
+                    "components": null
+                  }
+                ],
+                "name": "give_and_return_tuple",
+                "outputs": [
+                  {
+                    "name": "bimbam",
+                    "type": "(bool, u64)",
+                    "components": null
+                  }
+                ]
+            }
+        ]
+        "#;
+
+        let contract = Abigen::new("custom", contract).unwrap();
+        assert_eq!(0, contract.custom_enums.len());
+        assert_eq!(0, contract.custom_structs.len());
+        assert_eq!(2, contract.tuples.len());
+
+        assert!(contract.tuples.contains(&Property {
+            name: "bimbam".to_string(),
+            type_field: "(bool, u64)".to_string(),
+            components: None
+        }));
+        assert!(contract.tuples.contains(&Property {
+            name: "boumbim".to_string(),
+            type_field: "(u16, bool)".to_string(),
+            components: None
+        }));
 
         let _bindings = contract.generate().unwrap();
     }
