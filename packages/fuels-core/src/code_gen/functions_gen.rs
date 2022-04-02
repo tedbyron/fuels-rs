@@ -223,6 +223,7 @@ fn expand_input_param(
             );
             Ok(quote! { #ident })
         }
+        ParamType::Tuple(_) => expand_type(kind),
         // Primitive type
         _ => expand_type(kind),
     }
@@ -232,7 +233,9 @@ fn expand_input_param(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::default::Default;
     use std::str::FromStr;
+
     #[test]
     fn test_expand_function_simple() {
         let mut the_function = Function {
@@ -377,6 +380,49 @@ pub fn hello_world(
     .expect("method not found (this should never happen)")
 }
         "#,
+        );
+        let expected = expected.unwrap().to_string();
+        assert_eq!(result.unwrap().to_string(), expected);
+    }
+    #[test]
+    fn expand_function_primitive_types_tuple() {
+        let mut the_function = Function {
+            type_field: "unused".to_string(),
+            inputs: vec![],
+            name: "willberemapped".to_string(),
+            outputs: vec![],
+        };
+        the_function.inputs.push(Property {
+            name: String::from(""),
+            type_field: String::from("(u16, bool)"),
+            components: None,
+        });
+        the_function.outputs.push(Property {
+            name: String::from(""),
+            type_field: String::from("(bool, u64)"),
+            components: None,
+        });
+        let result = expand_function(
+            &the_function,
+            &ABIParser::new(),
+            &Default::default(),
+            &Default::default(),
+        );
+        let expected = TokenStream::from_str(
+            r#"
+                #[doc = "Calls the contract's `willberemapped` (0x000000009d006ee6) function"]
+                pub fn willberemapped(&self, p0: (u16, bool ,)) -> ContractCall<(bool, u64 ,)> {
+                    Contract::method_hash(
+                        &self.provider,
+                        self.contract_id,
+                        &self.wallet,
+                        [0, 0, 0, 0, 157, 0, 110, 230],
+                        &[ParamType::Tuple(vec![ParamType::Bool, ParamType::U64])],
+                        &[p0.into_token() ,]
+                    )
+                    .expect("method not found (this should never happen)")
+                }
+                "#,
         );
         let expected = expected.unwrap().to_string();
         assert_eq!(result.unwrap().to_string(), expected);
@@ -547,6 +593,30 @@ pub fn hello_world(
             "((u64 , bool ,) , (u64 , bool ,))"
         )
     }
+    #[test]
+    fn test_expand_fn_outputs_primitive_types_tuple() {
+        let result = expand_fn_outputs(&[
+            Property {
+                name: "unused".to_string(),
+                type_field: String::from("bool"),
+                components: None,
+            },
+            Property {
+                name: "unused".to_string(),
+                type_field: String::from("u64"),
+                components: None,
+            },
+        ]);
+        assert_eq!(result.unwrap().to_string(), "(bool , u64)");
+
+        let some_tuple = Property {
+            name: "unused".to_string(),
+            type_field: String::from("(bool, u64)"),
+            components: None,
+        };
+        let result = expand_fn_outputs(&[some_tuple]);
+        assert_eq!(result.unwrap().to_string(), "(bool , u64 ,)");
+    }
 
     // --- expand_function_argument ---
     #[test]
@@ -629,6 +699,32 @@ pub fn hello_world(
         let expected = r#"(, bim_bam : CarMaker,& [bim_bam . into_token () ,])"#;
         assert_eq!(result, expected);
     }
+    #[test]
+    fn test_expand_function_arguments_primitive_types_tuple() {
+        let mut the_function = Function {
+            type_field: "unused".to_string(),
+            inputs: vec![],
+            name: "helloworld".to_string(),
+            outputs: vec![],
+        };
+        the_function.inputs.push(Property {
+            name: String::from(""),
+            type_field: String::from("(u16, bool)"),
+            components: None,
+        });
+        the_function.outputs.push(Property {
+            name: String::from(""),
+            type_field: String::from("(bool, u64)"),
+            components: None,
+        });
+
+        let result =
+            expand_function_arguments(&the_function, &Default::default(), &Default::default());
+        let (args, call_args) = result.unwrap();
+        let result = format!("({},{})", args, call_args);
+        let expected = r#"(, p0 : (u16 , bool ,),& [p0 . into_token () ,])"#;
+        assert_eq!(result, expected);
+    }
 
     // --- expand_input_name ---
     #[test]
@@ -699,5 +795,13 @@ pub fn hello_world(
         let struct_name = Some(&struct_prop);
         let result = expand_input_param(&def, "unused", &struct_type, &struct_name);
         assert!(matches!(result, Err(Error::InvalidType(_))));
+    }
+    #[test]
+    fn test_expand_input_param_primitive_types_tuple() {
+        let def = Function::default();
+        let members = vec![ParamType::U16, ParamType::Bool];
+        let param_type = ParamType::Tuple(members);
+        let result = expand_input_param(&def, "unused", &param_type, &None);
+        assert_eq!(result.unwrap().to_string(), "(u16 , bool ,)");
     }
 }
