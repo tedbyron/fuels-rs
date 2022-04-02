@@ -4,6 +4,7 @@ use proc_macro2::TokenStream;
 use quote::quote;
 
 use crate::ParamType;
+use crate::Token;
 
 /// Expands a [`ParamType`] into a TokenStream.
 /// Used to expand functions when generating type-safe bindings of a JSON ABI.
@@ -49,6 +50,38 @@ pub fn expand_type(kind: &ParamType) -> Result<TokenStream, Error> {
                 .map(expand_type)
                 .collect::<Result<Vec<_>, _>>()?;
             Ok(quote! { (#(#members,)*) })
+        }
+    }
+}
+
+impl From<Token> for ParamType {
+    fn from(t: Token) -> ParamType {
+        match t {
+            Token::U8(_) => ParamType::U8,
+            Token::U16(_) => ParamType::U16,
+            Token::U32(_) => ParamType::U32,
+            Token::U64(_) => ParamType::U64,
+            Token::Bool(_) => ParamType::Bool,
+            Token::Byte(_) => ParamType::U8,
+            Token::B256(_) => ParamType::B256,
+            Token::Array(members) => {
+                ParamType::Array(Box::new(ParamType::from(members[0].clone())), members.len())
+            }
+            Token::String(content) => ParamType::String(content.len()),
+            Token::Struct(members) => ParamType::Struct(
+                members
+                    .iter()
+                    .map(|token| ParamType::from(token.clone()))
+                    .collect(),
+            ),
+            Token::Tuple(members) => ParamType::Tuple(
+                members
+                    .iter()
+                    .map(|token| ParamType::from(token.clone()))
+                    .collect(),
+            ),
+            // TODO(vnepveu): figure out how to convert the Token::Enum properly (w/ the Box type…)
+            _ => ParamType::Enum(vec![]),
         }
     }
 }
