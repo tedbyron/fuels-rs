@@ -6,8 +6,10 @@ use crate::ParamType;
 use inflector::Inflector;
 use proc_macro2::TokenStream;
 use quote::quote;
+use std::str::FromStr;
 use strum_macros::ToString;
 use sway_types::Property;
+use syn::Type;
 
 /// Functions used by the Abigen to expand custom types defined in an ABI spec.
 
@@ -222,6 +224,33 @@ pub fn expand_internal_enum(name: &str, prop: &Property) -> Result<TokenStream, 
             }
         }
     })
+}
+
+pub fn implement_detokenize_for_tuple(prop: &Property) -> Result<TokenStream, Error> {
+    let ty_tokenstream = TokenStream::from_str(&prop.type_field).unwrap();
+    let ty: Type = Type::Verbatim(ty_tokenstream);
+    Ok(quote! {
+    impl Tokenizable for #ty {
+        fn from_token(tuple: Token) -> std::result::Result<Self, InvalidOutputType>
+        where
+            Self: Sized,
+        {
+            println!("Called  from_token for first tuple");
+            if let Token::Tuple(members) = tuple {
+                let a = <u16 as Tokenizable>::from_token(members[0].clone())
+            .unwrap();
+                let b = <bool as  Tokenizable>::from_token(members[1].clone())
+            .unwrap();
+                return Ok((a, b));
+            }
+            Ok((3333, false))
+        }
+        fn into_token(self) -> Token {
+            println!("Called into_token for first tuple");
+            let members = vec![Token::U64(self.0), Token::Bool(self.1)];
+            Token::Tuple(members)
+        }
+    }})
 }
 
 // A custom type name is coming in as `struct $name` or `enum $name`.

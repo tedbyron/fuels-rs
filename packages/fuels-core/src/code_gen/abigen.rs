@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use crate::code_gen::bindings::ContractBindings;
 use crate::code_gen::custom_types_gen::{
     expand_internal_enum, expand_internal_struct, extract_custom_type_name_from_abi_property,
@@ -10,6 +8,7 @@ use crate::errors::Error;
 use crate::json_abi::{parse_param, ABIParser};
 use crate::source::Source;
 use crate::utils::ident;
+use std::collections::HashMap;
 use sway_types::{JsonABI, Property};
 
 use crate::ParamType;
@@ -106,6 +105,7 @@ impl Abigen {
         let contract_functions = self.functions()?;
         let abi_structs = self.abi_structs()?;
         let abi_enums = self.abi_enums()?;
+        let abi_tuples = self.abi_tuples()?;
 
         let (includes, code) = if self.no_std {
             (
@@ -157,6 +157,7 @@ impl Abigen {
 
                 #abi_structs
                 #abi_enums
+                #abi_tuples
             }
         })
     }
