@@ -120,6 +120,7 @@ impl Abigen {
                     use fuel_tx::{ContractId, Address};
                     use fuels_rs::contract::contract::{Contract, ContractCall};
                     use fuels_rs::signers::{provider::Provider, LocalWallet};
+                    use fuels_core::InvalidOutputType;
                     use std::str::FromStr;
                 },
                 quote! {

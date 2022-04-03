@@ -1424,3 +1424,32 @@ async fn test_multiple_args() {
     let response = instance.get_single(5).call().await.unwrap();
     assert_eq!(response.value, 5);
 }
+
+#[tokio::test]
+async fn compile_bindings_primitive_types_tuple() {
+    let rng = &mut StdRng::seed_from_u64(2322u64);
+    abigen!(
+        MyContract,
+        "packages/fuels-abigen-macro/tests/test_projects/tuple-type-return/out/debug/tuple-type-return-abi.json"
+    );
+    // Build the contract
+    let salt: [u8; 32] = rng.gen();
+    let salt = Salt::from(salt);
+    let compiled = Contract::load_sway_contract(
+        "tests/test_projects/tuple-type-return/out/debug/tuple-type-return.bin",
+        salt,
+    )
+    .unwrap();
+    let (provider, wallet) = setup_test_provider_and_wallet().await;
+    let contract_id = Contract::deploy(&compiled, &provider, &wallet, TxParameters::default())
+        .await
+        .unwrap();
+    println!("Contract deployed @ {:x}", contract_id);
+    let contract_instance = MyContract::new(contract_id.to_string(), provider, wallet);
+    println!("Instantiated the contract_instance");
+    let tmp = contract_instance.give_and_return_tuple((255 as u16, true));
+    println!("Called the function");
+    let tmp = tmp.call().await.unwrap();
+    println!("Called call");
+    println!("{:?}", tmp.value);
+}
