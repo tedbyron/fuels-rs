@@ -227,30 +227,41 @@ pub fn expand_internal_enum(name: &str, prop: &Property) -> Result<TokenStream, 
 }
 
 pub fn implement_detokenize_for_tuple(prop: &Property) -> Result<TokenStream, Error> {
+    let mut tuple_name_alias = prop.type_field.chars();
+    tuple_name_alias.next();
+    tuple_name_alias.next_back();
+    let tuple_name_alias = tuple_name_alias.as_str().replace(", ", "_");
+    println!("tuple_name_alias: {}", tuple_name_alias);
+    let tuple_name_alias = "mytupletypealias";
+    let type_alias_tokenstream = TokenStream::from_str(&*tuple_name_alias).unwrap();
+    let ty_alias: Type = Type::Verbatim(type_alias_tokenstream);
+
     let ty_tokenstream = TokenStream::from_str(&prop.type_field).unwrap();
     let ty: Type = Type::Verbatim(ty_tokenstream);
     Ok(quote! {
-    impl Tokenizable for #ty {
-        fn from_token(tuple: Token) -> std::result::Result<Self, InvalidOutputType>
-        where
-            Self: Sized,
-        {
-            println!("Called  from_token for first tuple");
-            if let Token::Tuple(members) = tuple {
-                let a = <u16 as Tokenizable>::from_token(members[0].clone())
-            .unwrap();
-                let b = <bool as  Tokenizable>::from_token(members[1].clone())
-            .unwrap();
-                return Ok((a, b));
+        pub struct #ty_alias(pub #ty);
+        impl Tokenizable for #ty_alias {
+            fn from_token(tuple: Token) -> std::result::Result<Self, InvalidOutputType>
+            where
+                Self: Sized,
+            {
+                println!("Called  from_token for first tuple");
+                if let Token::Tuple(members) = tuple {
+                    let a = <u16 as Tokenizable>::from_token(members[0].clone())
+                .unwrap();
+                    let b = <bool as  Tokenizable>::from_token(members[1].clone())
+                .unwrap();
+                    return Ok((a, b));
+                }
+                Ok((3333, false))
             }
-            Ok((3333, false))
+            fn into_token(self) -> Token {
+                println!("Called into_token for first tuple");
+                let members = vec![Token::U16(self.0.0), Token::Bool(self.0.1)];
+                Token::Tuple(members)
+            }
         }
-        fn into_token(self) -> Token {
-            println!("Called into_token for first tuple");
-            let members = vec![Token::U64(self.0), Token::Bool(self.1)];
-            Token::Tuple(members)
-        }
-    }})
+    })
 }
 
 // A custom type name is coming in as `struct $name` or `enum $name`.

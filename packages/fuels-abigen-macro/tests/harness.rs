@@ -1447,7 +1447,7 @@ async fn compile_bindings_primitive_types_tuple() {
     println!("Contract deployed @ {:x}", contract_id);
     let contract_instance = MyContract::new(contract_id.to_string(), provider, wallet);
     println!("Instantiated the contract_instance");
-    let tmp = contract_instance.give_and_return_tuple((255 as u16, true));
+    let tmp = contract_instance.give_and_return_tuple(mytupletypealias((255 as u16, true)));
     println!("Called the function");
     let tmp = tmp.call().await.unwrap();
     println!("Called call");
